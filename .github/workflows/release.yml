@@ -11,20 +11,44 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
-      - name: Prepare for release
-        run: |
-          for i in *.sdk; do
-              if [[ -d $i ]]; then
-                tar -cJvf $i.tar.xz $i && echo $(ls *.tar.xz)
-              fi
-          done
-
-      - name: Publish release
+      - name: Cleaning up existing releases and tags
         env:
-          GH_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          TAG="${GITHUB_REF##*/}-${GITHUB_SHA:0:7}"
-          gh release create "$TAG" --draft --title "Draft Release"
-          gh release upload "$TAG" ./*.tar.xz
+          gh release delete release --yes || true
+
+      - name: Cache SDK archives
+        id: cache-sdk
+        uses: actions/cache@v4
+        with:
+          path: |
+            *.tar.xz
+          key: sdk-${{ hashFiles('**/*.sdk/**') }}
+          restore-keys: |
+            sdk-
+
+      - name: Prepare SDK archives
+        if: steps.cache-sdk.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          
+          rm -f ./*.tar.xz
+          
+          find . -type d -name '*.sdk' | while read -r dir; do
+            tarname="$(echo "$dir" | sed 's|^\./||; s|/|_|g').tar.xz"
+            tar -cJvf "$tarname" "$dir"
+          done
+          
+          if [ -z "$(find . -maxdepth 1 -name '*.tar.xz')" ]; then
+            exit 1
+          fi
+
+      - name: Create Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create release \
+            --title "SDK Release" \
+            ./*.tar.xz
