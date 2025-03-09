@@ -19,18 +19,7 @@ jobs:
         run: |
           gh release delete release --yes || true
 
-      - name: Cache SDK archives
-        id: cache-sdk
-        uses: actions/cache@v4
-        with:
-          path: |
-            *.tar.xz
-          key: sdk-${{ hashFiles('**/*.sdk/**') }}
-          restore-keys: |
-            sdk-
-
       - name: Prepare SDK archives
-        if: steps.cache-sdk.outputs.cache-hit != 'true'
         run: |
           set -euo pipefail
           
